@@ -10,7 +10,7 @@ test("the config file keeps keys and settings side by side, readable only by its
   saveSettings(path, { speed: "fast", fx: "calm", receipts: false });
   saveKeys(path, { secret: "g".repeat(43) });
   saveKeys(path, { device: "d".repeat(43), run: "0123456789abcdef01234567" });
-  assert.equal(statSync(path).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(statSync(path).mode & 0o777, 0o600); // Windows has no such modes: the profile folder guards it
   const config = loadConfig(path, {});
   assert.deepEqual([config.speed, config.secret, config.device, config.run], ["fast", "g".repeat(43), "d".repeat(43), "0123456789abcdef01234567"]);
   saveKeys(path, { device: "", run: "" });

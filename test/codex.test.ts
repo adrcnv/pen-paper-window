@@ -7,6 +7,10 @@ import { CodexBackend, CodexRows, NOT_SIGNED_IN, UNSUPPORTED, parseTurn } from "
 import { StreamReader } from "../src/core/stream.ts";
 import type { GameEvent, Receipt } from "../src/core/protocol.ts";
 
+// The stand-in is a shell script, which Windows can't run as a program; the
+// window itself runs the real claude.exe or codex.exe there.
+const SHELL_ONLY = process.platform === "win32" && "the stand-in is a shell script";
+
 // A stand-in `codex`: `login status` answers as the test says; `exec`
 // prints its arguments, its stdin and the events a test gives it, so a turn
 // can run without a model.
@@ -71,7 +75,7 @@ test("the DM runs locked down: no shell or other built-in tools, only the world'
   assert.ok(told.args().includes('model="gpt-5.5"') && told.args().includes('model_reasoning_effort="high"'));
 });
 
-test("a turn streams the rows the window reads, keeps the thread to resume, and the player's words go in on stdin", async () => {
+test("a turn streams the rows the window reads, keeps the thread to resume, and the player's words go in on stdin", { skip: SHELL_ONLY }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "hx-"));
   const events = turn(
     ...toolEvents("roll", { ability: "charisma", dc: 12 }, { who: "Ken", ability: "charisma", roll: 12, total: 13, dc: 12, success: true }),
@@ -92,7 +96,7 @@ test("a turn streams the rows the window reads, keeps the thread to resume, and 
   assert.equal(b.lastTurn()?.narration, narration);
 });
 
-test("a signed-out Codex is told plainly, before the first turn and when a turn is refused", async () => {
+test("a signed-out Codex is told plainly, before the first turn and when a turn is refused", { skip: SHELL_ONLY }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "hx-"));
   await assert.rejects(new CodexBackend(options(dir, fakeCodex([], dir, { signedIn: false }))).say("hi", () => {}), { message: NOT_SIGNED_IN });
   const refused = [{ type: "thread.started", thread_id: "t" }, { type: "turn.failed", error: { message: "unexpected status 401 Unauthorized: Missing bearer" } }];
@@ -102,7 +106,7 @@ test("a signed-out Codex is told plainly, before the first turn and when a turn 
   assert.equal(b.sessionId(), null, "a failed turn keeps no thread");
 });
 
-test("a Codex that does not know a locking setting stops the turn rather than run without it", async () => {
+test("a Codex that does not know a locking setting stops the turn rather than run without it", { skip: SHELL_ONLY }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "hx-"));
   const b = new CodexBackend(options(dir, fakeCodex([], dir, { stderr: "Error loading config.toml: unknown configuration field `features.shell_tool` in -c/--config override" })));
   await assert.rejects(b.say("hi", () => {}), { message: UNSUPPORTED });

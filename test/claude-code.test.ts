@@ -6,6 +6,10 @@ import { join } from "node:path";
 import { ClaudeCodeBackend, NOT_SIGNED_IN, dmEnv, parseTurn } from "../src/backends/claude-code.ts";
 import { resultRow, textRow, toolRows } from "./helpers.ts";
 
+// The stand-in is a shell script, which Windows can't run as a program; the
+// window itself runs the real claude.exe or codex.exe there.
+const SHELL_ONLY = process.platform === "win32" && "the stand-in is a shell script";
+
 // A stand-in `claude` that prints its arguments, its stdin and the rows a
 // test gives it, so a turn can run without a model.
 function fakeClaude(rows: unknown[], dir: string): string {
@@ -41,7 +45,7 @@ test("the DM runs locked down: no built-in tools, only the world's, none of the 
   assert.deepEqual(cfg, { mcpServers: { "harness-dm": { type: "http", url: "http://127.0.0.1:8742/mcp" } } });
 });
 
-test("a turn streams rows, keeps the session to resume, and the player's words go in on stdin", async () => {
+test("a turn streams rows, keeps the session to resume, and the player's words go in on stdin", { skip: SHELL_ONLY }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "hc-"));
   const rows = [...toolRows("look", {}, { here: {} }), textRow("You stand in the rain."), textRow("A dog barks."), resultRow()];
   const b = new ClaudeCodeBackend(options(dir, fakeClaude(rows, dir)));
@@ -56,7 +60,7 @@ test("a turn streams rows, keeps the session to resume, and the player's words g
   assert.deepEqual(b.lastTurn() && { input: b.lastTurn()!.input, narration: b.lastTurn()!.narration }, { input: "--help me", narration });
 });
 
-test("a signed-out Claude Code is told plainly", async () => {
+test("a signed-out Claude Code is told plainly", { skip: SHELL_ONLY }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "hc-"));
   const b = new ClaudeCodeBackend(options(dir, fakeClaude([resultRow({ is_error: true, result: "Not logged in · Please run /login" })], dir)));
   await assert.rejects(b.say("hi", () => {}), { message: NOT_SIGNED_IN });
