@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'">
+<title>Pen and Paper</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div id="wash" aria-hidden="true"></div>
+<main id="app">
+  <section id="story-col">
+    <div id="story" aria-live="polite"></div>
+    <div id="activity" hidden><span class="sigil" aria-hidden="true"><i></i><i></i><i></i></span><span class="text"></span><span class="hint">Esc to stop</span></div>
+    <form id="prompt" autocomplete="off">
+      <span class="glyph" aria-hidden="true">›</span>
+      <textarea id="input" rows="1" placeholder="What do you do? Put speech in &quot;quotes&quot;." spellcheck="true"></textarea>
+    </form>
+  </section>
+  <aside id="side">
+    <div id="status"></div>
+    <nav id="tabs" role="tablist"></nav>
+    <div id="panel" role="tabpanel"></div>
+  </aside>
+</main>
+<canvas id="particles" aria-hidden="true"></canvas>
+<div id="banner" aria-live="polite"></div>
+<div id="mapview" hidden><div class="frame"><button type="button" class="close" aria-label="Close the map">×</button><div class="body"></div></div></div>
+<div id="creation" hidden></div>
+<div id="keeprun" hidden></div>
+<div id="menu" hidden></div>
+<div id="news" hidden></div>
+<div id="offline" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

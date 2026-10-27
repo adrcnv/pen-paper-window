@@ -1,0 +1,310 @@
+[
+ {
+  "rows": [
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo1",
+       "name": "mcp__harness-dm__look",
+       "input": {}
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo1",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"here\": {}}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo2",
+       "name": "mcp__harness-dm__roll",
+       "input": {
+        "ability": "strength",
+        "dc": 13
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo2",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"who\": \"Gerd Ulfsson\", \"ability\": \"strength\", \"roll\": 9, \"total\": 11, \"dc\": 13, \"success\": false, \"why\": \"wrestle Hobb back from the cellar door\", \"foes_strike\": [\"Hobb (person:345): 17 against your guard of 15 \\u2014 hits for 5 (you are at 33/38)\"]}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo3",
+       "name": "mcp__harness-dm__roll",
+       "input": {
+        "ability": "strength",
+        "dc": 12
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo3",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"who\": \"Gerd Ulfsson\", \"ability\": \"strength\", \"roll\": 20, \"total\": 22, \"dc\": 12, \"success\": true, \"critical\": true, \"why\": \"slam him into the doorpost\"}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo4",
+       "name": "mcp__harness-dm__hurt",
+       "input": {
+        "who": "person:345",
+        "amount": 7
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo4",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"who\": \"Hobb\", \"hp\": \"3/12\", \"down\": false}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "text",
+       "text": "\u2026"
+      }
+     ]
+    }
+   }
+  ],
+  "narration": "The bolt jumps in its keeper and the cellar door bangs outward. Hobb comes up the steps like a thrown sack, all elbows and teeth, and his fist finds your ribs before you have your feet set.\n\n\"You'll hang for this, you and the reeve both! *Both* of you!\" he screams, spit flying.\n\nYou take the blow, catch his collar and drive him sideways into the doorpost. The whole frame of the Reeve's Hall shivers. Hobb sags against the wood, gasping.\n\nCasimir Krasnov has not moved from behind his table. \"Put him back down there,\" he says flatly. \"Gently or otherwise. I've no stomach for a hanging tonight.\"\n\nVarya Volkov is already at your side, steadying your arm. \"You're bleeding. Sit a moment \u2014 I've linen in my pack, and you've earned a mug.\"\n\nOlek Tarasch grins through his split lip and claps your shoulder. \"Told you he was the one, didn't I? I'd follow you up any road in this valley, sellsword.\""
+ },
+ {
+  "rows": [
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo5",
+       "name": "mcp__harness-dm__transfer",
+       "input": {
+        "from": "person:89",
+        "to": "player",
+        "coins": 35
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo5",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"from\": \"Casimir Krasnov\", \"to\": \"Gerd Ulfsson\", \"coins\": 35}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo6",
+       "name": "mcp__harness-dm__award_xp",
+       "input": {
+        "amount": 40
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo6",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"gained\": 200, \"level\": 4, \"new_level\": true, \"why\": \"held the hall against Hobb\"}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo7",
+       "name": "mcp__harness-dm__hurt",
+       "input": {
+        "who": "player",
+        "amount": -4
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo7",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"who\": \"Gerd Ulfsson\", \"hp\": \"37/38\"}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "text",
+       "text": "\u2026"
+      }
+     ]
+    }
+   }
+  ],
+  "narration": "Casimir counts the coins out one by one, as if each costs him a tooth, and slides the stack across the table.\n\n\"Thirty-five. As agreed.\" A pause. \"The hall's thanks, too, for what they're worth.\"\n\nVarya binds your side with clean linen while Olek fetches the mug she promised. The rain keeps on at the shutters."
+ },
+ {
+  "rows": [
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "toolu_demo8",
+       "name": "mcp__harness-dm__move",
+       "input": {
+        "to": "place:9"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "type": "user",
+    "message": {
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_demo8",
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"to\": \"Hollowbourne\", \"took_minutes\": 300, \"heading\": \"south-west\", \"stopped_on_the_road\": true}"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "type": "assistant",
+    "message": {
+     "content": [
+      {
+       "type": "text",
+       "text": "\u2026"
+      }
+     ]
+    }
+   }
+  ],
+  "narration": "The cart track climbs out of Dubrslav through the sheep-walk and the rain thins to a cold mist. Five hours on, where the road dips toward Hollowbourne, a felled tree lies across it \u2014 cut, not fallen.\n\nA voice from the bracken: \"That's far enough. Purse on the stump, and walk on.\""
+ }
+]

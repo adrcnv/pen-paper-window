@@ -1,0 +1,61 @@
+{
+  "name": "pen-and-paper",
+  "productName": "Pen and Paper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A window to play Pen and Paper in: it runs your own Claude Code or Codex as the Dungeon Master and paints what it tells you.",
+  "license": "MIT",
+  "desktopName": "pen-and-paper.desktop",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && electron .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "dist": "node build.mjs && electron-builder"
+  },
+  "build": {
+    "appId": "tech.penandpaper.window",
+    "productName": "Pen and Paper",
+    "icon": "build/icon.png",
+    "artifactName": "pen-and-paper-${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "asar": true,
+    "linux": {
+      "artifactName": "pen-and-paper.${ext}",
+      "syncDesktopName": true,
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.role-playing-games"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@fontsource/alegreya": "5.3.0",
+    "@fontsource/alegreya-sc": "5.2.8",
+    "@types/node": "26.6.4",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "electron-updater": "6.8.10",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
