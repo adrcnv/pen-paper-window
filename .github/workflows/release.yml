@@ -1,0 +1,50 @@
+# The window's releases, in its own repository (this folder is that
+# repository's root; the game's repository ignores the file). On a tag such
+# as v0.2.0, which must be package.json's version, Linux, Windows and a Mac
+# each build the window and attach it to a draft release, with the files
+# its self-update reads (latest.yml, latest-linux.yml) naming this
+# repository. Nothing reaches players until the draft is published by hand.
+# Unsigned (README.md): no certificate is looked for.
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: The tag is package.json's version
+        shell: bash
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p 'require("./package.json").version')"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+      - name: Build, and attach to the tag's draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: >-
+          node build.mjs && pnpm exec electron-builder --publish always
+          -c.publish.provider=github
+          -c.publish.owner=${{ github.repository_owner }}
+          -c.publish.repo=${{ github.event.repository.name }}
