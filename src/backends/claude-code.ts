@@ -168,11 +168,18 @@ export function dmEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return { ...env, MCP_TOOL_TIMEOUT: env.MCP_TOOL_TIMEOUT ?? "600000" };
 }
 
-export function findClaude(env: NodeJS.ProcessEnv = process.env): string {
-  const names = process.platform === "win32" ? ["claude.exe"] : ["claude"];
+export function findClaude(env: NodeJS.ProcessEnv = process.env, platform = process.platform): string {
+  const names = platform === "win32" ? ["claude.exe"] : ["claude"];
   const dirs = (env.PATH ?? "").split(delimiter).filter(Boolean);
   for (const dir of dirs) for (const n of names) if (isFile(join(dir, n))) return join(dir, n);
-  if (process.platform !== "win32" && env.SHELL) {
+  // npm on Windows puts a claude.cmd on PATH, with the program in its package.
+  if (platform === "win32") {
+    for (const dir of [...dirs, ...(env.APPDATA ? [join(env.APPDATA, "npm")] : [])]) {
+      const exe = join(dir, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+      if (isFile(exe)) return exe;
+    }
+  }
+  if (platform !== "win32" && env.SHELL) {
     try {
       const found = execFileSync(env.SHELL, ["-lic", "command -v claude"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] })
         .trim().split("\n").pop();

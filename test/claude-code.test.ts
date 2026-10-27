@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { ClaudeCodeBackend, NOT_SIGNED_IN, dmEnv, parseTurn } from "../src/backends/claude-code.ts";
+import { dirname, join } from "node:path";
+import { ClaudeCodeBackend, NOT_SIGNED_IN, dmEnv, findClaude, parseTurn } from "../src/backends/claude-code.ts";
 import { resultRow, textRow, toolRows } from "./helpers.ts";
 
 // The stand-in is a shell script, which Windows can't run as a program; the
@@ -83,4 +83,15 @@ test("the DM retuned from the window takes its new model and effort on the next 
   const args = b.args();
   assert.equal(args[args.indexOf("--model") + 1], "opus");
   assert.equal(args[args.indexOf("--effort") + 1], "max");
+});
+
+test("on Windows, a Claude Code npm installed is found in its package, by PATH or by npm's own folder", () => {
+  const appdata = mkdtempSync(join(tmpdir(), "appdata-"));
+  const npm = join(appdata, "npm");
+  const exe = join(npm, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+  mkdirSync(dirname(exe), { recursive: true });
+  writeFileSync(exe, "");
+  writeFileSync(join(npm, "claude.cmd"), "");
+  assert.equal(findClaude({ PATH: npm }, "win32"), exe, "never the .cmd, which would need a shell");
+  assert.equal(findClaude({ PATH: "", APPDATA: appdata }, "win32"), exe);
 });

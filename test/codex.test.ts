@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, chmodSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { CodexBackend, CodexRows, NOT_SIGNED_IN, UNSUPPORTED, parseTurn } from "../src/backends/codex.ts";
+import { dirname, join } from "node:path";
+import { CodexBackend, CodexRows, NOT_SIGNED_IN, UNSUPPORTED, findCodex, parseTurn } from "../src/backends/codex.ts";
 import { StreamReader } from "../src/core/stream.ts";
 import type { GameEvent, Receipt } from "../src/core/protocol.ts";
 
@@ -120,4 +120,16 @@ test("Codex's warnings and retries are not failures; a tool result arriving alon
   assert.deepEqual(rows.map((r: any) => r.message.content[0].type), ["tool_use", "tool_result"]);
   const parsed = new CodexRows().of({ type: "item.started", item: { id: "x", type: "mcp_tool_call", tool: "move", arguments: '{"to":"place:3"}' } });
   assert.deepEqual((parsed[0] as any).message.content[0].input, { to: "place:3" });
+});
+
+test("on Windows, a Codex npm installed is found in its package, by PATH or by npm's own folder", () => {
+  const appdata = mkdtempSync(join(tmpdir(), "appdata-"));
+  const npm = join(appdata, "npm");
+  const exe = join(npm, "node_modules", "@openai", "codex", "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
+  mkdirSync(dirname(exe), { recursive: true });
+  writeFileSync(exe, "");
+  writeFileSync(join(npm, "codex.cmd"), "");
+  assert.equal(findCodex({ PATH: npm }, "win32", "x64"), exe, "never the .cmd, which would need a shell");
+  assert.equal(findCodex({ PATH: "", APPDATA: appdata }, "win32", "x64"), exe, "opened from the Start menu without npm's folder on PATH");
+  assert.equal(findCodex({ PATH: npm }, "win32", "arm64"), "codex.exe", "another machine's package is not this one's");
 });

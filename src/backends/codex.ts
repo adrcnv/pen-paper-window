@@ -252,12 +252,21 @@ function loginStatus(codex: string): Promise<"in" | "out" | "missing"> {
 // Where the installed `codex` is: PATH, then the login shell, then where
 // npm, bun, Homebrew and OpenAI's installer put it. On Windows only the
 // program itself: npm's codex.cmd would need a shell to run, and a shell
-// reads its arguments.
-export function findCodex(env: NodeJS.ProcessEnv = process.env): string {
-  const names = process.platform === "win32" ? ["codex.exe"] : ["codex"];
+// reads its arguments; npm keeps the program in Codex's package for the
+// machine, under the folder the .cmd is in.
+export function findCodex(env: NodeJS.ProcessEnv = process.env, platform = process.platform, arch = process.arch): string {
+  const names = platform === "win32" ? ["codex.exe"] : ["codex"];
   const dirs = (env.PATH ?? "").split(delimiter).filter(Boolean);
   for (const dir of dirs) for (const n of names) if (isFile(join(dir, n))) return join(dir, n);
-  if (process.platform !== "win32" && env.SHELL) {
+  if (platform === "win32") {
+    const [pkg, triple] = arch === "arm64" ? ["codex-win32-arm64", "aarch64-pc-windows-msvc"] : ["codex-win32-x64", "x86_64-pc-windows-msvc"];
+    const exe = ["vendor", triple, "bin", "codex.exe"];
+    for (const dir of [...dirs, ...(env.APPDATA ? [join(env.APPDATA, "npm")] : [])]) {
+      const top = join(dir, "node_modules", "@openai");
+      for (const p of [join(top, "codex", "node_modules", "@openai", pkg, ...exe), join(top, pkg, ...exe)]) if (isFile(p)) return p;
+    }
+  }
+  if (platform !== "win32" && env.SHELL) {
     try {
       const found = execFileSync(env.SHELL, ["-lic", "command -v codex"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] })
         .trim().split("\n").pop();
