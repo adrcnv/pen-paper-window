@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, session as sessions, shell } from "electron";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -221,6 +221,15 @@ async function start(choice: Choice): Promise<StartInfo> {
 
 app.whenReady().then(() => {
   if (!process.env.HARNESS_DEV) Menu.setApplicationMenu(null);
+  // Chromium fetches its spelling dictionaries from Google, on any system
+  // but a Mac, which checks spelling with its own. The window talks to the
+  // world server and GitHub and nothing else, so there it doesn't check
+  // spelling. Turning it off isn't enough: with no languages there is
+  // nothing to fetch.
+  if (process.platform !== "darwin") {
+    sessions.defaultSession.setSpellCheckerLanguages([]);
+    sessions.defaultSession.setSpellCheckerEnabled(false);
+  }
   ipcMain.handle("harness:menu", () => menu());
   ipcMain.handle("harness:news", () => whatsNew());
   ipcMain.handle("harness:news-seen", () => {
