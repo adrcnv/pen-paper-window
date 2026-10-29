@@ -657,10 +657,11 @@ body.at-menu #app { visibility: hidden; }
 .own-form .sizes button.on { border-color: var(--gold); color: var(--gold); background: rgba(255, 215, 122, 0.08); }
 .launch .note.own { font-style: italic; }
 /* closing on a guest's run: keep it first? over everything, the story darkened behind */
-#keeprun { position: fixed; inset: 0; z-index: 8; overflow-y: auto; display: grid; justify-items: center; align-content: safe center; padding: 6vh 24px 8vh;
+#keeprun, #signin { position: fixed; inset: 0; z-index: 8; overflow-y: auto; display: grid; justify-items: center; align-content: safe center; padding: 6vh 24px 8vh;
   background: rgba(3, 4, 7, 0.9); backdrop-filter: blur(6px); }
 .creation.keeprun { width: min(600px, 100%); }
 .keeprun .lede { font-family: var(--serif); font-size: 1.08rem; line-height: 1.55; color: var(--ink-soft); margin: 0.2rem 0 0.4rem; text-align: center; }
+.signin .how { margin: 0; font-size: 0.86rem; line-height: 1.5; color: var(--dim); text-align: center; overflow-wrap: anywhere; }
 /* what's new, at launch: a small box over the menu, put away with one click */
 #news { position: fixed; inset: 0; z-index: 9; overflow-y: auto; display: grid; justify-items: center; align-content: safe center; padding: 6vh 24px;
   background: rgba(3, 4, 7, 0.55); backdrop-filter: blur(2px); }

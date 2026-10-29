@@ -322,6 +322,11 @@ app.whenReady().then(() => {
     saveKeys(configPath(), { device: "", run: "" });
   });
   ipcMain.handle("harness:say", (_e, input: string) => { session?.turn(String(input)); });
+  // The DM's own program not signed in: its sign-in started from here
+  // (Claude Code's, in the browser), or asked again once the player says
+  // they signed in themselves.
+  ipcMain.handle("harness:dm-sign-in", async () => ((await session?.signIn()) ? { ok: true } : { error: "not signed in" }));
+  ipcMain.handle("harness:dm-recheck", async () => ((await session?.recheck()) ? { ok: true } : { error: "not signed in" }));
   ipcMain.handle("harness:cancel", () => session?.cancel());
   ipcMain.handle("harness:map", () => session?.map() ?? "");
   ipcMain.handle("harness:atlas", () => session?.atlas() ?? null);

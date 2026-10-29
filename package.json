@@ -1,7 +1,7 @@
 {
   "name": "pen-and-paper",
   "productName": "Pen and Paper",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "A window to play Pen and Paper in: it runs your own Claude Code or Codex as the Dungeon Master and paints what it tells you.",

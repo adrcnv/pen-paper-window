@@ -1,9 +1,10 @@
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { homedir } from "node:os";
-import type { Backend } from "../core/session.ts";
+import { SignedOut, type Backend } from "../core/session.ts";
+import { carried, turns } from "./transcript.ts";
 
 // The DM is the player's own Codex (OpenAI's CLI), run once per turn with
 // `codex exec` and resumed by thread id, as backends/claude-code.ts runs
@@ -88,8 +89,14 @@ export class CodexBackend implements Backend {
     return existsSync(this.sessionPath) ? readFileSync(this.sessionPath, "utf8").trim() || null : null;
   }
 
+  // A conversation to resume, or turns on record that a new one is told.
   hasConversation(): boolean {
-    return this.sessionId() != null;
+    return this.sessionId() != null || existsSync(this.transcriptPath);
+  }
+
+  // The next turn begins a new conversation; the transcript stays.
+  rotate(): void {
+    rmSync(this.sessionPath, { force: true });
   }
 
   retune(model: string, effort: string): void {
@@ -97,13 +104,7 @@ export class CodexBackend implements Backend {
   }
 
   lastTurn(): { input: string; narration: string } | null {
-    if (!existsSync(this.transcriptPath)) return null;
-    const lines = readFileSync(this.transcriptPath, "utf8").trim().split("\n");
-    try {
-      return JSON.parse(lines[lines.length - 1]);
-    } catch {
-      return null;
-    }
+    return turns(this.transcriptPath).at(-1) ?? null;
   }
 
   settings(): [string, string][] {
@@ -134,16 +135,26 @@ export class CodexBackend implements Backend {
     return args;
   }
 
+  // Asked before the first turn. Codex has no sign-in the window can start
+  // (not tried without a terminal), so the player is told to run its own.
+  async signedOut(): Promise<string | null> {
+    const status = await loginStatus(this.codex);
+    if (status === "in") this.signedIn = true;
+    return status === "out" ? NOT_SIGNED_IN : null;
+  }
+
   // The player's words go in on stdin, never as an argument, so nothing they
   // type can be read as a flag.
   async say(input: string, onRow: (row: unknown) => void, signal?: AbortSignal): Promise<{ narration: string }> {
     if (!this.signedIn) {
       const status = await loginStatus(this.codex);
       if (status === "missing") throw new Error(`Could not start Codex (${this.codex}): is it installed?`);
-      if (status === "out") throw new Error(NOT_SIGNED_IN);
+      if (status === "out") throw new SignedOut(NOT_SIGNED_IN);
       this.signedIn = true;
     }
     const started = Date.now();
+    // A new conversation in a game already under way is told how it stood.
+    const told = this.sessionId() ? input : carried(this.transcriptPath, input);
     return new Promise((resolve, reject) => {
       const child = spawn(this.codex, this.args(), { cwd: this.cwd, stdio: ["pipe", "pipe", "pipe"] });
       const events: any[] = [];
@@ -170,7 +181,7 @@ export class CodexBackend implements Backend {
         const result = parseTurn(events);
         if (!result) return reject(new Error(`The DM did not answer (exit ${code}): ${err.trim().slice(-400)}`));
         if (result.error) {
-          return reject(new Error(/401|unauthori[sz]ed|not logged in/i.test(result.error) ? NOT_SIGNED_IN : `The DM stopped: ${result.error}`));
+          return reject(/401|unauthori[sz]ed|not logged in/i.test(result.error) ? new SignedOut(NOT_SIGNED_IN) : new Error(`The DM stopped: ${result.error}`));
         }
         if (result.sessionId) writeFileSync(this.sessionPath, result.sessionId);
         appendFileSync(this.transcriptPath, JSON.stringify({
@@ -178,7 +189,7 @@ export class CodexBackend implements Backend {
         }) + "\n");
         resolve({ narration: result.narration });
       });
-      child.stdin.end(input);
+      child.stdin.end(told);
     });
   }
 }

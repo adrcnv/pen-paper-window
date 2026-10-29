@@ -1,9 +1,10 @@
-import { spawn, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { homedir } from "node:os";
-import type { Backend } from "../core/session.ts";
+import { SignedOut, type Backend } from "../core/session.ts";
+import { carried, turns } from "./transcript.ts";
 
 // The DM is the player's own Claude Code, run once per turn in print mode
 // and resumed by session id. This is the whole of what the client does with
@@ -31,8 +32,17 @@ export interface ClaudeCodeOptions {
   claudePath?: string;
 }
 
-export const NOT_SIGNED_IN =
-  "Claude Code is not signed in. Open a terminal, run `claude`, sign in with your own account, then come back.";
+// Not signed in: the command that signs in the very program the window runs,
+// which needn't be on the terminal's PATH (on Windows it often isn't), as
+// PowerShell takes it there. /login only works in a session of Claude Code's
+// own, never in the window, which runs it a request at a time.
+export function notSignedIn(claude: string, platform: NodeJS.Platform = process.platform): string {
+  const cmd = platform === "win32" ? `& "${claude}" auth login` : /\s/.test(claude) ? `"${claude}" auth login` : `${claude} auth login`;
+  return `Claude Code is not signed in. In ${platform === "win32" ? "PowerShell" : "a terminal"}, run ${cmd}, sign in with your own account in the browser, then come back.`;
+}
+// The Claude app's sign-in is its own: the window needs the Claude Code program.
+export const NOT_INSTALLED =
+  "Claude Code isn't installed, or this window can't find it. Install it (code.claude.com/docs/en/setup), sign it in with `claude auth login` in a new terminal, then come back. The Claude app alone isn't enough.";
 
 export class ClaudeCodeBackend implements Backend {
   private o: ClaudeCodeOptions;
@@ -62,8 +72,14 @@ export class ClaudeCodeBackend implements Backend {
     return existsSync(this.sessionPath) ? readFileSync(this.sessionPath, "utf8").trim() || null : null;
   }
 
+  // A conversation to resume, or turns on record that a new one is told.
   hasConversation(): boolean {
-    return this.sessionId() != null;
+    return this.sessionId() != null || existsSync(this.transcriptPath);
+  }
+
+  // The next turn begins a new conversation; the transcript stays.
+  rotate(): void {
+    rmSync(this.sessionPath, { force: true });
   }
 
   retune(model: string, effort: string): void {
@@ -71,13 +87,7 @@ export class ClaudeCodeBackend implements Backend {
   }
 
   lastTurn(): { input: string; narration: string } | null {
-    if (!existsSync(this.transcriptPath)) return null;
-    const lines = readFileSync(this.transcriptPath, "utf8").trim().split("\n");
-    try {
-      return JSON.parse(lines[lines.length - 1]);
-    } catch {
-      return null;
-    }
+    return turns(this.transcriptPath).at(-1) ?? null;
   }
 
   args(): string[] {
@@ -97,6 +107,8 @@ export class ClaudeCodeBackend implements Backend {
   // type can be read as a flag.
   say(input: string, onRow: (row: unknown) => void, signal?: AbortSignal): Promise<{ narration: string }> {
     const started = Date.now();
+    // A new conversation in a game already under way is told how it stood.
+    const told = this.sessionId() ? input : carried(this.transcriptPath, input);
     return new Promise((resolve, reject) => {
       const child = spawn(this.claude, this.args(), { cwd: this.cwd, stdio: ["pipe", "pipe", "pipe"], env: dmEnv() });
       const rows: any[] = [];
@@ -114,27 +126,59 @@ export class ClaudeCodeBackend implements Backend {
         rows.push(row);
         onRow(row);
       });
-      child.on("error", (e) => reject(new Error(`Could not start Claude Code (${this.claude}): ${e.message}`)));
+      child.on("error", (e: NodeJS.ErrnoException) =>
+        reject(new Error(e.code === "ENOENT" ? NOT_INSTALLED : `Could not start Claude Code (${this.claude}): ${e.message}`)));
       child.on("close", (code) => {
         signal?.removeEventListener("abort", stop);
         if (signal?.aborted) return reject(new Error("stopped"));
         const result = parseTurn(rows);
         if (!result) {
           const said = `${err}\n${rows.map((r) => JSON.stringify(r)).join("\n")}`;
-          return reject(new Error(/not logged in|\/login|authenticat/i.test(said) ? NOT_SIGNED_IN
-            : `The DM did not answer (exit ${code}): ${said.trim().slice(-400)}`));
+          return reject(/not logged in|\/login|authenticat/i.test(said) ? new SignedOut(notSignedIn(this.claude))
+            : new Error(`The DM did not answer (exit ${code}): ${said.trim().slice(-400)}`));
         }
+        // A turn that failed keeps no conversation: the next resumes the last
+        // that was told, and a first that failed leaves none to resume.
+        if (result.signedOut || (result.error && !result.narration && /not logged in|\/login/i.test(result.error))) {
+          return reject(new SignedOut(notSignedIn(this.claude)));
+        }
+        if (result.error && !result.narration) return reject(new Error(`The DM stopped: ${result.error}`));
         if (result.sessionId) writeFileSync(this.sessionPath, result.sessionId);
-        if (result.error && !result.narration) {
-          return reject(new Error(/not logged in|\/login/i.test(result.error) ? NOT_SIGNED_IN : `The DM stopped: ${result.error}`));
-        }
         appendFileSync(this.transcriptPath, JSON.stringify({
           at: new Date().toISOString(), input, narration: result.narration, ms: Date.now() - started,
           usage: result.usage, error: result.error,
         }) + "\n");
         resolve({ narration: result.narration });
       });
-      child.stdin.end(input);
+      child.stdin.end(told);
+    });
+  }
+
+  // Asked before the first turn (`claude auth status`: 0 signed in, 1 not).
+  // A Claude Code not there, or not answering, is left to the turn to say.
+  signedOut(): Promise<string | null> {
+    return new Promise((done) => {
+      execFile(this.claude, ["auth", "status"], { cwd: this.cwd, timeout: 15_000 }, (e) =>
+        done(e && !e.killed && typeof e.code === "number" ? notSignedIn(this.claude) : null));
+    });
+  }
+
+  // Claude Code's own sign-in (`claude auth login`): it opens the browser
+  // and finishes by itself once the player has signed in there, on the
+  // address it listens on. The window starts it and waits, and never sees a
+  // code or a credential; its prompt to paste a code is never answered.
+  signIn(signal?: AbortSignal): Promise<boolean> {
+    return new Promise((done) => {
+      const child = spawn(this.claude, ["auth", "login"], { cwd: this.cwd, stdio: ["pipe", "ignore", "ignore"] });
+      const stop = () => child.kill();
+      const timer = setTimeout(stop, 10 * 60_000);
+      signal?.addEventListener("abort", stop, { once: true });
+      child.on("error", () => done(false));
+      child.on("close", async () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", stop);
+        done(!signal?.aborted && (await this.signedOut()) === null);
+      });
     });
   }
 }
@@ -142,11 +186,14 @@ export class ClaudeCodeBackend implements Backend {
 // The stream's closing `result` row carries the session id; the narration is
 // every text block the DM wrote this turn, in order, including any written
 // between tool calls, which the closing row alone would drop.
-export function parseTurn(rows: any[]): { narration: string; sessionId?: string; error?: string; usage?: unknown } | null {
+//
+// Claude Code's own notices ("Not logged in · Please run /login") come as
+// assistant rows of its own making (the model "<synthetic>"), never the DM's.
+export function parseTurn(rows: any[]): { narration: string; sessionId?: string; error?: string; usage?: unknown; signedOut?: boolean } | null {
   const final = [...rows].reverse().find((r) => r?.type === "result");
   if (!final) return null;
   const texts = rows
-    .filter((r) => r?.type === "assistant")
+    .filter((r) => r?.type === "assistant" && r.message?.model !== "<synthetic>")
     .flatMap((r) => (Array.isArray(r.message?.content) ? r.message.content : []))
     .filter((c: any) => c?.type === "text")
     .map((c: any) => String(c.text ?? "").trim())
@@ -156,6 +203,7 @@ export function parseTurn(rows: any[]): { narration: string; sessionId?: string;
     sessionId: final.session_id,
     error: final.is_error ? String(final.result ?? final.subtype ?? "error") : undefined,
     usage: final.usage,
+    signedOut: rows.some((r) => r?.type === "assistant" && r.error === "authentication_failed") || undefined,
   };
 }
 

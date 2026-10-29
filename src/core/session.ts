@@ -8,13 +8,26 @@ export interface Backend {
   // One turn: `onRow` gets each row of the DM's stream as it arrives; the
   // promise gives everything the DM said, in order.
   say(input: string, onRow: (row: unknown) => void, signal?: AbortSignal): Promise<{ narration: string }>;
-  // Whether there is a conversation to carry on.
+  // Whether there is a game to carry on: a conversation to resume, or
+  // turns on record that a new one is told.
   hasConversation(): boolean;
+  // A new conversation from the next turn on, told the last few turns on
+  // record before the player's words.
+  rotate?(): void;
   // The last turn on record, to show where the player left off.
   lastTurn(): { input: string; narration: string } | null;
   // Another model or effort from the next turn on, the conversation kept.
   retune?(model: string, effort: string): void;
+  // Whether its own program is signed in: nothing if so (or if it can't
+  // say), else what the player is told to do about it.
+  signedOut?(): Promise<string | null>;
+  // Its own sign-in, started from the window (Claude Code's, in the
+  // browser): whether it is signed in after.
+  signIn?(signal?: AbortSignal): Promise<boolean>;
 }
+
+// A turn refused because the DM's own program isn't signed in.
+export class SignedOut extends Error {}
 
 // The world server: what to show beside the story. world/http.ts reaches it
 // over HTTP.
@@ -36,6 +49,10 @@ export interface World {
 
 export const OPENING = "Begin: look around and set the opening scene.";
 
+// Words starting with / are commands to the DM's own program (Claude Code
+// runs them, and /login can't run there), never the story's.
+export const SLASH = "Words starting with / are commands for the DM's own program, not the story, so nothing was sent. Say what your character does.";
+
 // What the DM is told of this window, beside the rulebook.
 export const WINDOW = "In this window the player makes the choices a new level brings on a screen of their own: say the level is gained " +
   "and leave the choosing to them; what they chose comes with their next words.";
@@ -55,6 +72,14 @@ export class Session {
   // What the player chose in the window since the last turn, for the DM
   // with their next words.
   private told: string[] = [];
+  // The story has begun here: past the sign-in, shown or told.
+  private opened = false;
+  private signing: AbortController | null = null;
+  private opening: Promise<void> | null = null;
+  // The settlement the DM's conversation is in. Arrived in another, the
+  // next turn begins a new conversation (a seam): the records carry the
+  // game, and a conversation grown long drifts.
+  private settledIn: string | null = null;
 
 
   // Another model or effort for the DM from the next turn on.
@@ -70,7 +95,18 @@ export class Session {
   // The first thing to show: where the player left off, or the DM's
   // opening scene; in a world nobody is in yet, the player's character to
   // make first, here, with no word to the DM until it is made.
-  async open(): Promise<void> {
+  // Once at a time: a sign-in finished while the player also says they
+  // signed in must not set the scene twice.
+  open(): Promise<void> {
+    this.opening ??= this.begin_().finally(() => { this.opening = null; });
+    return this.opening;
+  }
+
+  // The DM's program not signed in: said so first, and nothing goes to it.
+  private async begin_(): Promise<void> {
+    const out = await this.backend.signedOut?.();
+    if (out) return this.emit({ type: "signIn", how: out, canSignIn: !!this.backend.signIn });
+    this.opened = true;
     this.board = await this.world.board();
     if (this.board.make_character) return this.emit({ type: "create", board: this.board });
     if (!this.backend.hasConversation()) return this.turn(OPENING, "");
@@ -84,6 +120,7 @@ export class Session {
   // `shown`: the words as the story shows them (none for the opening).
   async turn(input: string, shown = input): Promise<void> {
     if (this.busy) return;
+    if (shown && /^\s*\//.test(input)) return this.emit({ type: "notice", text: SLASH });
     if (this.unfinished) {
       this.unfinished = false;
       const now = await this.world.board().catch(() => null);
@@ -102,6 +139,12 @@ export class Session {
         if (!shown && input !== OPENING) this.told.push(input.replace(`\n\n${OPENING}`, ""));
         return this.emit({ type: "spent", board: this.board });
       }
+    }
+    // Out of a fight, in a settlement other than the conversation's: a seam.
+    const town = settlement(this.board);
+    if (town && town !== this.settledIn && !this.board?.status?.fight) {
+      if (this.settledIn) this.backend.rotate?.();
+      this.settledIn = town;
     }
     const before = this.board;
     const reader = new StreamReader(before?.you);
@@ -123,7 +166,8 @@ export class Session {
       else if (board.level_up) this.emit({ type: "level", board });
     } catch (e) {
       this.unfinished = true;
-      this.emit({ type: "error", message: this.busy?.signal.aborted ? "(stopped)" : errorText(e) });
+      if (e instanceof SignedOut) this.emit({ type: "signIn", how: e.message, canSignIn: !!this.backend.signIn });
+      else this.emit({ type: "error", message: this.busy?.signal.aborted ? "(stopped)" : errorText(e) });
     } finally {
       this.busy = null;
     }
@@ -131,6 +175,28 @@ export class Session {
 
   cancel(): void {
     this.busy?.abort();
+    this.signing?.abort();
+  }
+
+  // The DM's own sign-in, from the window; once signed in, a story not yet
+  // begun begins.
+  async signIn(): Promise<boolean> {
+    if (!this.backend.signIn || this.signing) return false;
+    this.signing = new AbortController();
+    try {
+      if (!(await this.backend.signIn(this.signing.signal))) return false;
+    } finally {
+      this.signing = null;
+    }
+    if (!this.opened) void this.open();
+    return true;
+  }
+
+  // Signed in meanwhile, as the player says (from a terminal, say): asked again.
+  async recheck(): Promise<boolean> {
+    if (await this.backend.signedOut?.()) return false;
+    if (!this.opened) void this.open();
+    return true;
   }
 
   // The character made in the window: the DM is told who they are, unseen
@@ -201,6 +267,12 @@ export class Session {
   lore(): Promise<Lore> {
     return this.world.lore();
   }
+}
+
+// The settlement the player is in, if any: a road, a border post, a cave or
+// a boat is none.
+function settlement(board: Board | null): string | null {
+  return board?.status?.setting?.size ? board.scene?.town ?? null : null;
 }
 
 function errorText(e: unknown): string {

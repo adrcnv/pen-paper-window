@@ -431,6 +431,8 @@ export type GameEvent =
   | { type: "runOver"; board: Board }
   // No turns are left to play: nothing was said to the DM.
   | { type: "spent"; board: Board }
+  | { type: "signIn"; how: string; canSignIn: boolean } // the DM's own program isn't signed in: how to, and whether the window can start it
+  | { type: "notice"; text: string } // the player's words not sent, and why
   // The window is closing on a guest's run: keep it on an account first?
   | { type: "quitting"; hours: number }
   | { type: "error"; message: string };

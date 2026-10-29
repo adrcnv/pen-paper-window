@@ -14,6 +14,7 @@ import { showRunOver } from "./runover.ts";
 import { askToKeep } from "./keeprun.ts";
 import { showMenu } from "./menu.ts";
 import { showNews } from "./news.ts";
+import { askToSignIn } from "./signin.ts";
 
 // The page: the story on the left, the world beside it, the sky behind.
 // It speaks to the shell only through `window.harness` (core/bridge.ts).
@@ -243,6 +244,24 @@ bridge.onEvent((e) => {
     }
     case "quitting":
       askToKeep($("#keeprun"), e.hours, { bridge, screen });
+      break;
+    case "signIn": {
+      // The DM's own program isn't signed in: what the player said (if
+      // anything) went unheard, and the story waits on the sign-in.
+      setBusy(false);
+      if (pending) pending.append(h("p", { class: "spent" }, "The DM didn't hear this: it isn't signed in. Sign in, then say it again."));
+      pending = null;
+      const begun = !!story.querySelector(".turn");
+      askToSignIn($("#signin"), e.how, e.canSignIn, { bridge, screen }).then(() => {
+        if (!begun && !panels.board?.make_character) setBusy(true); // the story begins now
+      });
+      break;
+    }
+    case "notice":
+      setBusy(false);
+      (pending ?? newTurn(null)).append(h("p", { class: "spent" }, e.text));
+      pending = null;
+      follow();
       break;
     case "error":
       setBusy(false);

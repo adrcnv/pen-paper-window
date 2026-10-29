@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync, existsS
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { CodexBackend, CodexRows, NOT_SIGNED_IN, UNSUPPORTED, findCodex, parseTurn } from "../src/backends/codex.ts";
+import { SignedOut } from "../src/core/session.ts";
 import { StreamReader } from "../src/core/stream.ts";
 import type { GameEvent, Receipt } from "../src/core/protocol.ts";
 
@@ -96,6 +97,18 @@ test("a turn streams the rows the window reads, keeps the thread to resume, and 
   assert.equal(b.lastTurn()?.narration, narration);
 });
 
+test("a thread begun anew is told the last turns on record before the player's words, which alone go on record", { skip: SHELL_ONLY }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "hx-"));
+  const b = new CodexBackend(options(dir, fakeCodex(turn(said("The gate of Mirova.")), dir)));
+  await b.say("walk to the gate", () => {});
+  b.rotate();
+  assert.deepEqual(b.args().slice(0, 2), ["exec", "--json"]);
+  await b.say("go in", () => {});
+  const told = readFileSync(join(dir, "stdin.txt"), "utf8");
+  assert.ok(told.includes("The player: walk to the gate\n\nYou: The gate of Mirova.") && told.endsWith("\n\n---\n\ngo in"));
+  assert.equal(b.lastTurn()?.input, "go in");
+});
+
 test("a signed-out Codex is told plainly, before the first turn and when a turn is refused", { skip: SHELL_ONLY }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "hx-"));
   await assert.rejects(new CodexBackend(options(dir, fakeCodex([], dir, { signedIn: false }))).say("hi", () => {}), { message: NOT_SIGNED_IN });
@@ -132,4 +145,11 @@ test("on Windows, a Codex npm installed is found in its package, by PATH or by n
   assert.equal(findCodex({ PATH: npm }, "win32", "x64"), exe, "never the .cmd, which would need a shell");
   assert.equal(findCodex({ PATH: "", APPDATA: appdata }, "win32", "x64"), exe, "opened from the Start menu without npm's folder on PATH");
   assert.equal(findCodex({ PATH: npm }, "win32", "arm64"), "codex.exe", "another machine's package is not this one's");
+});
+
+test("a Codex that isn't there is said to be missing, not asked to sign in", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "hx-"));
+  const b = new CodexBackend(options(dir, join(dir, "no-such-codex")));
+  assert.equal(await b.signedOut(), null, "left to the turn to say");
+  await assert.rejects(b.say("hi", () => {}), (e) => !(e instanceof SignedOut) && /is it installed\?/.test((e as Error).message));
 });

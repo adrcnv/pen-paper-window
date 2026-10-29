@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { OPENING, Session, type Backend, type World } from "../src/core/session.ts";
+import { OPENING, SLASH, Session, SignedOut, type Backend, type World } from "../src/core/session.ts";
 import type { Board, GameEvent } from "../src/core/protocol.ts";
 import { toolRows } from "./helpers.ts";
 
@@ -100,6 +100,35 @@ test("a turn in the same world does not", async () => {
   assert.ok(!events.some((e) => e.type === "newWorld"));
 });
 
+const at = (town: string | null, extra: Partial<NonNullable<Board["status"]>> = {}): Board => ({
+  world: "w", you: "Ada", status: { day: 1, setting: town ? { scene: "town", size: "town" } : { scene: "land" }, ...extra },
+  scene: { town: town ?? "the road between Belsk and Mirova", people: [], things: [], wares: [], ways: [], beyond: [] },
+});
+
+function rotating(inputs: string[]): Backend {
+  return { ...backend(true, inputs), rotate: () => { inputs.push("(rotated)"); } };
+}
+
+test("arrived in another settlement, the next turn begins a new conversation; the road, a fight or the same town does not", async () => {
+  const inputs: string[] = [];
+  const boards = [at("Belsk"), at("Belsk"), at(null), at("Mirova", { fight: 2 }), at("Mirova"), at("Mirova")];
+  const s = new Session(rotating(inputs), world(boards), () => {});
+  await s.open();
+  for (const said of ["the market", "set out", "walk on", "fight", "find an inn"]) await s.turn(said);
+  assert.deepEqual(inputs, ["the market", "set out", "walk on", "fight", "(rotated)", "find an inn"]);
+});
+
+test("a window opened on the road takes the first settlement it comes to as its conversation's, and so does one opened in town", async () => {
+  const inputs: string[] = [];
+  const s = new Session(rotating(inputs), world([at(null), at("Mirova"), at("Mirova")]), () => {});
+  await s.open();
+  for (const said of ["walk on", "find an inn"]) await s.turn(said);
+  const again = new Session(rotating(inputs), world([at("Mirova"), at("Mirova")]), () => {});
+  await again.open();
+  await again.turn("sleep");
+  assert.deepEqual(inputs, ["walk on", "find an inn", "sleep"]);
+});
+
 test("after a stopped turn, the next looks at the world first, and a new one is not spoken to from the old", async () => {
   const inputs: string[] = [];
   const events: GameEvent[] = [];
@@ -184,4 +213,50 @@ test("a character made with no turns left is told to the DM with the player's ne
   assert.equal(events.at(-1)?.type, "spent");
   await s.turn("I look about.");
   assert.deepEqual(inputs, ["Ada is made.\n\nI look about."]);
+});
+
+test("a DM whose program isn't signed in is not spoken to: the window asks for its sign-in, then the story begins", async () => {
+  const inputs: string[] = [];
+  const events: GameEvent[] = [];
+  let signedIn = false;
+  const b: Backend = { ...backend(false, inputs), signedOut: async () => (signedIn ? null : "Claude Code is not signed in."), signIn: async () => (signedIn = true) };
+  const s = new Session(b, world([day(1)]), (e) => events.push(e));
+  await s.open();
+  assert.deepEqual(inputs, [], "nothing goes to a DM that can't answer");
+  assert.deepEqual(events.at(-1), { type: "signIn", how: "Claude Code is not signed in.", canSignIn: true });
+  assert.equal(await s.signIn(), true);
+  for (let i = 0; i < 20 && !inputs.length; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(inputs, [OPENING], "signed in, the DM sets the scene");
+});
+
+test("words starting with / are not sent: they would be the DM program's own commands", async () => {
+  const inputs: string[] = [];
+  const events: GameEvent[] = [];
+  const s = new Session(backend(true, inputs), world([day(1)]), (e) => events.push(e));
+  await s.open();
+  await s.turn("/login");
+  await s.turn("  /clear");
+  assert.deepEqual(inputs, []);
+  assert.deepEqual(events.slice(-2), [{ type: "notice", text: SLASH }, { type: "notice", text: SLASH }]);
+  await s.turn("I say \"/ is a slash\".");
+  assert.equal(inputs.length, 1, "a slash later on is only words");
+});
+
+test("a DM signed out in the middle of play asks for its sign-in rather than failing the turn", async () => {
+  const events: GameEvent[] = [];
+  const b: Backend = { ...backend(true, []), say: async () => { throw new SignedOut("Codex is not signed in."); } };
+  const s = new Session(b, world([day(1)]), (e) => events.push(e));
+  await s.open();
+  await s.turn("I wait.");
+  assert.deepEqual(events.at(-1), { type: "signIn", how: "Codex is not signed in.", canSignIn: false });
+});
+
+test("signed in twice over, before the first check has answered, the scene is set once", async () => {
+  const inputs: string[] = [];
+  const b: Backend = { ...backend(false, inputs), signedOut: () => new Promise((r) => setTimeout(() => r(null), 20)) };
+  const s = new Session(b, world([day(1)]), () => {});
+  await Promise.all([s.recheck(), s.recheck(), s.open()]);
+  for (let i = 0; i < 20 && !inputs.length; i++) await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(inputs, [OPENING]);
 });

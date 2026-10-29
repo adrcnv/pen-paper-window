@@ -51,6 +51,10 @@ export interface Bridge {
   cancelSignIn(): Promise<void>;
   signOut(): Promise<void>;
   say(input: string): Promise<void>;
+  // The DM's own program not signed in: start its sign-in (Claude Code's
+  // opens the browser), or ask again after the player signed in elsewhere.
+  dmSignIn(): Promise<{ ok: true } | { error: string }>;
+  dmRecheck(): Promise<{ ok: true } | { error: string }>;
   cancel(): Promise<void>;
   map(): Promise<string>;
   atlas(): Promise<Atlas | null>;
